@@ -1,0 +1,30 @@
+import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user, account }) {
+      if (account && user) {
+        // Here you would typically call POST /v1/auth/callback
+        // For now we'll mock it
+        token.tenantId = 'mock-tenant-id';
+        token.accessToken = account.access_token;
+      }
+      return token;
+    },
+    async session({ session, token }: any) {
+      session.tenantId = token.tenantId;
+      session.accessToken = token.accessToken;
+      return session;
+    },
+  },
+  pages: {
+    signIn: '/login',
+  },
+});
