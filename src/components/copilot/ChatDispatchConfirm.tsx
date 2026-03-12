@@ -1,0 +1,106 @@
+'use client';
+
+import { useState } from 'react';
+import { Product } from '@/src/types';
+import { mockGroups } from '@/src/lib/api-mock';
+import { Button } from '../ui/button';
+import { CheckSquare, Square, Send, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/src/lib/utils';
+
+interface ChatDispatchConfirmProps {
+  product: Product;
+  variation: string;
+}
+
+export function ChatDispatchConfirm({ product, variation }: ChatDispatchConfirmProps) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(mockGroups.filter(g => g.isActive).map(g => g.id)));
+  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const toggle = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSend = async () => {
+    setSending(true);
+    // mock: simula 1.5s de envio
+    await new Promise(r => setTimeout(r, 1500));
+    setSending(false);
+    setSent(true);
+  };
+
+  if (sent) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+        <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-400" />
+        <div>
+          <p className="font-semibold text-emerald-400">Disparo confirmado!</p>
+          <p className="text-xs text-muted-foreground">
+            {selected.size} grupo(s) · {product.name.slice(0, 30)}...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full rounded-2xl border border-border/50 bg-card/50 overflow-hidden">
+      {/* header */}
+      <div className="border-b border-border/50 p-3">
+        <p className="text-sm font-semibold">Selecione os grupos</p>
+        <p className="text-xs text-muted-foreground">{selected.size} de {mockGroups.length} selecionados</p>
+      </div>
+
+      {/* groups */}
+      <div className="divide-y divide-border/30">
+        {mockGroups.map(g => (
+          <button
+            key={g.id}
+            onClick={() => toggle(g.id)}
+            className={cn(
+              'flex w-full items-center gap-3 px-3 py-2.5 transition-colors hover:bg-secondary/40',
+              !g.isActive && 'opacity-40',
+            )}
+            disabled={!g.isActive}
+          >
+            {selected.has(g.id)
+              ? <CheckSquare className="h-4 w-4 shrink-0 text-primary" />
+              : <Square className="h-4 w-4 shrink-0 text-muted-foreground" />
+            }
+            <div className="flex-1 text-left">
+              <p className="text-sm font-medium">{g.name}</p>
+              <p className="text-xs text-muted-foreground">{g.memberCount} membros</p>
+            </div>
+            {!g.isActive && (
+              <span className="text-[10px] text-muted-foreground">Inativo</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* preview copy */}
+      <div className="border-t border-border/50 bg-secondary/20 px-3 py-2">
+        <p className="text-[10px] text-muted-foreground mb-1">Preview da mensagem:</p>
+        <p className="line-clamp-2 text-[11px] text-foreground/80">{variation}</p>
+      </div>
+
+      {/* confirm */}
+      <div className="border-t border-border/50 p-3">
+        <Button
+          onClick={handleSend}
+          disabled={selected.size === 0 || sending}
+          className="w-full gap-2"
+        >
+          {sending
+            ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Enviando...</>
+            : <><Send className="h-4 w-4" />Disparar para {selected.size} grupo(s)</>
+          }
+        </Button>
+      </div>
+    </div>
+  );
+}
