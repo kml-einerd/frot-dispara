@@ -1,30 +1,21 @@
-import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
+import { supabase } from './supabase';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
-  ],
-  callbacks: {
-    async jwt({ token, user, account }) {
-      if (account && user) {
-        // Here you would typically call POST /v1/auth/callback
-        // For now we'll mock it
-        token.tenantId = 'mock-tenant-id';
-        token.accessToken = account.access_token;
-      }
-      return token;
+export async function signInWithGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/copiloto`,
     },
-    async session({ session, token }: any) {
-      session.tenantId = token.tenantId;
-      session.accessToken = token.accessToken;
-      return session;
-    },
-  },
-  pages: {
-    signIn: '/login',
-  },
-});
+  });
+  if (error) throw error;
+}
+
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
+export async function getSession() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session;
+}

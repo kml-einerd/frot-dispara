@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/src/components/ui/card";
 import { Badge } from "@/src/components/ui/badge";
 import { Tag, ExternalLink, MoreVertical, Trash2, Edit } from "lucide-react";
 import useSWR from "swr";
+import { PullToRefresh } from "@/src/components/ui/pull-to-refresh";
 import { Promo } from "@/src/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -12,15 +13,16 @@ import { Button } from "@/src/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/src/components/ui/dropdown-menu";
 
 export default function PromosPage() {
-  const { data: promosData } = useSWR('/promos');
+  const { data: promosData, mutate } = useSWR('/promos');
   const promos: Promo[] = promosData?.data || [];
 
   return (
+    <PullToRefresh onRefresh={() => mutate()}>
     <div className="flex flex-col gap-6">
       <Header title="Promoções Criadas" />
       
-      <div className="px-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="px-4 sm:px-6">
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {promos.map((promo) => (
             <Card key={promo.id} className="overflow-hidden border-border/50 bg-card/50 transition-all hover:border-primary/50">
               <div className="aspect-video overflow-hidden bg-muted">
@@ -38,7 +40,7 @@ export default function PromosPage() {
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Button variant="ghost" size="icon" className="h-10 w-10">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -55,8 +57,8 @@ export default function PromosPage() {
 
                 <div className="mt-4 flex items-center justify-between">
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-emerald-500">R$ {promo.promoPrice.toFixed(2)}</span>
-                    <span className="text-xs text-muted-foreground line-through">R$ {promo.originalPrice.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-emerald-500">R$ {Number(promo.promoPrice).toFixed(2)}</span>
+                    <span className="text-xs text-muted-foreground line-through">R$ {Number(promo.originalPrice).toFixed(2)}</span>
                   </div>
                   <Badge variant={promo.status === 'ACTIVE' ? 'success' : 'secondary'}>
                     {promo.status}
@@ -64,12 +66,12 @@ export default function PromosPage() {
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1 gap-2 text-xs" asChild>
+                  <Button variant="outline" size="sm" className="min-h-[44px] flex-1 gap-2 text-xs" asChild>
                     <a href={promo.affiliateUrl} target="_blank" rel="noopener noreferrer">
                       Ver Link <ExternalLink className="h-3 w-3" />
                     </a>
                   </Button>
-                  <Button size="sm" className="flex-1 gap-2 text-xs">
+                  <Button size="sm" className="min-h-[44px] flex-1 gap-2 text-xs">
                     Disparar
                   </Button>
                 </div>
@@ -84,5 +86,6 @@ export default function PromosPage() {
         </div>
       </div>
     </div>
+    </PullToRefresh>
   );
 }

@@ -39,14 +39,14 @@ export function SearchBar({ onResults, onSearching }: SearchBarProps) {
     setIsUploading(true);
     onSearching(true);
     
-    const formData = new FormData();
-    formData.append('image', file);
-
     try {
-      const { products } = await api.post('/promos/search-by-image', formData);
-      onResults(products || []);
+      // TODO(FASE 2): Implementar image-generation via /promos/generate-image
+      // Por ora, busca textual usando nome do arquivo
+      const fallbackQuery = file.name.replace(/\.\w+$/, '').replace(/[-_]/g, ' ');
+      const { data } = await api.post('/agent/interact', { message: fallbackQuery });
+      onResults(data?.products || []);
     } catch (error) {
-      console.error('Image search failed', error);
+      console.error('Image upload fallback failed', error);
     } finally {
       setIsUploading(false);
       onSearching(false);

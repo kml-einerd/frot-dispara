@@ -7,12 +7,13 @@ import { Switch } from "@/src/components/ui/switch";
 import { Users, Search, Filter } from "lucide-react";
 import { Input } from "@/src/components/ui/input";
 import useSWR from "swr";
+import { PullToRefresh } from "@/src/components/ui/pull-to-refresh";
 import { Group, WaSession } from "@/src/types";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/src/components/ui/select";
 
 export default function GroupsPage() {
-  const { data: groupsData } = useSWR('/groups');
+  const { data: groupsData, mutate } = useSWR('/groups');
   const { data: sessionsData } = useSWR('/wa/sessions');
   
   const groups: Group[] = groupsData?.data || [];
@@ -28,10 +29,11 @@ export default function GroupsPage() {
   });
 
   return (
+    <PullToRefresh onRefresh={() => mutate()}>
     <div className="flex flex-col gap-6">
       <Header title="Grupos" showNewPromo={false} />
       
-      <div className="flex flex-col gap-4 px-6 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 px-4 sm:px-6 md:flex-row md:items-center md:justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input 
@@ -58,22 +60,22 @@ export default function GroupsPage() {
         </div>
       </div>
 
-      <div className="px-6">
+      <div className="px-4 sm:px-6">
         <Card className="border-border/50 bg-card/50">
           <CardContent className="p-0">
             <div className="divide-y divide-border/50">
               {filteredGroups.map((group) => (
-                <div key={group.id} className="flex items-center justify-between p-4 transition-colors hover:bg-accent/30">
-                  <div className="flex items-center gap-4">
+                <div key={group.id} className="flex items-center justify-between gap-2 p-3 transition-colors hover:bg-accent/30 sm:p-4">
+                  <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <Users className="h-5 w-5" />
                     </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{group.name}</span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium text-sm">{group.name}</span>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span>{group.memberCount} membros</span>
-                        <span>•</span>
-                        <span>Sessão: {sessions.find(s => s.id === group.sessionId)?.name || 'N/A'}</span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="hidden sm:inline">Sessão: {sessions.find(s => s.id === group.sessionId)?.name || 'N/A'}</span>
                       </div>
                     </div>
                   </div>
@@ -98,5 +100,6 @@ export default function GroupsPage() {
         </Card>
       </div>
     </div>
+    </PullToRefresh>
   );
 }

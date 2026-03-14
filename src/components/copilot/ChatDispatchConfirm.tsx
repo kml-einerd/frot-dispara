@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Product } from '@/src/types';
-import { mockGroups } from '@/src/lib/api-mock';
+import useSWR from 'swr';
+import { Product, Group } from '@/src/types';
 import { Button } from '../ui/button';
-import { CheckSquare, Square, Send, CheckCircle2 } from 'lucide-react';
+import { CheckSquare, Square, Send, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
 interface ChatDispatchConfirmProps {
@@ -13,9 +13,19 @@ interface ChatDispatchConfirmProps {
 }
 
 export function ChatDispatchConfirm({ product, variation }: ChatDispatchConfirmProps) {
-  const [selected, setSelected] = useState<Set<string>>(new Set(mockGroups.filter(g => g.isActive).map(g => g.id)));
+  const { data: groupsData, isLoading: groupsLoading } = useSWR('/groups');
+  const groups: Group[] = groupsData?.data || [];
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [initialized, setInitialized] = useState(false);
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // Auto-select active groups once loaded
+  if (!initialized && groups.length > 0) {
+    setSelected(new Set(groups.filter(g => g.isActive).map(g => g.id)));
+    setInitialized(true);
+  }
 
   const toggle = (id: string) => {
     setSelected(prev => {
@@ -27,10 +37,18 @@ export function ChatDispatchConfirm({ product, variation }: ChatDispatchConfirmP
 
   const handleSend = async () => {
     setSending(true);
-    // mock: simula 1.5s de envio
-    await new Promise(r => setTimeout(r, 1500));
-    setSending(false);
-    setSent(true);
+    try {
+      const { api } = await import('@/src/lib/api');
+      await api.post('/dispatches', {
+        promoId: product.id,
+        groupIds: Array.from(selected),
+      });
+      setSent(true);
+    } catch (error) {
+      console.error('Dispatch failed', error);
+    } finally {
+      setSending(false);
+    }
   };
 
   if (sent) {
@@ -52,12 +70,12 @@ export function ChatDispatchConfirm({ product, variation }: ChatDispatchConfirmP
       {/* header */}
       <div className="border-b border-border/50 p-3">
         <p className="text-sm font-semibold">Selecione os grupos</p>
-        <p className="text-xs text-muted-foreground">{selected.size} de {mockGroups.length} selecionados</p>
+        <p className="text-xs text-muted-foreground">{selected.size} de {groups.length} selecionados</p>
       </div>
 
       {/* groups */}
       <div className="divide-y divide-border/30">
-        {mockGroups.map(g => (
+        {groups.map(g => (
           <button
             key={g.id}
             onClick={() => toggle(g.id)}

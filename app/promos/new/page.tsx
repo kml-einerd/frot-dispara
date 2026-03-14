@@ -10,7 +10,7 @@ import { Product } from "@/src/types";
 import { Badge } from "@/src/components/ui/badge";
 import { useMarketplacesStore } from "@/src/store/marketplaces";
 import { useEffect } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 
 export default function NewPromoPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -27,7 +27,7 @@ export default function NewPromoPage() {
     <div className="flex flex-col gap-6">
       <Header title="Criar Promoção" showNewPromo={false} />
       
-      <div className="grid gap-6 px-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 px-4 sm:px-6 lg:grid-cols-2">
         {/* Coluna Esquerda - Busca */}
         <div className="flex flex-col gap-6">
           <SearchBar 
@@ -41,14 +41,14 @@ export default function NewPromoPage() {
               {shopeeConnected ? (
                 <Badge variant="success" className="bg-violet-600">Shopee ✓</Badge>
               ) : (
-                <Link href="/settings">
+                <Link to="/settings">
                   <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">Conectar Shopee</Badge>
                 </Link>
               )}
               {mlConnected ? (
                 <Badge variant="success" className="bg-yellow-600">Mercado Livre ✓</Badge>
               ) : (
-                <Link href="/settings">
+                <Link to="/settings">
                   <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">Conectar ML</Badge>
                 </Link>
               )}

@@ -35,7 +35,7 @@ export function SessionCard({ session, onViewQR, onRefresh }: SessionCardProps) 
 
   const handleSyncGroups = async () => {
     try {
-      const { imported } = await api.post(`/groups/sync/${session.id}`);
+      const { imported } = await api.post('/groups/import', { sessionId: session.id });
       toast({ title: "Grupos sincronizados", description: `${imported} grupos foram importados.` });
     } catch (error) {
       toast({ title: "Erro ao sincronizar", description: "Não foi possível sincronizar os grupos.", variant: "destructive" });
@@ -79,15 +79,15 @@ export function SessionCard({ session, onViewQR, onRefresh }: SessionCardProps) 
 
       <CardFooter className="grid grid-cols-2 gap-2">
         {session.status === 'DISCONNECTED' ? (
-          <Button variant="outline" size="sm" className="col-span-2 gap-2" onClick={onViewQR}>
+          <Button variant="outline" size="sm" className="col-span-2 min-h-[44px] gap-2" onClick={onViewQR}>
             <QrCode className="h-4 w-4" /> Ver QR
           </Button>
         ) : (
           <>
-            <Button variant="outline" size="sm" className="gap-2" onClick={handleSyncGroups}>
+            <Button variant="outline" size="sm" className="min-h-[44px] gap-2" onClick={handleSyncGroups}>
               <RefreshCw className="h-3 w-3" /> Sincronizar
             </Button>
-            <Button variant="ghost" size="sm" className="gap-2 text-destructive hover:bg-destructive/10" onClick={handleDisconnect}>
+            <Button variant="ghost" size="sm" className="min-h-[44px] gap-2 text-destructive hover:bg-destructive/10" onClick={handleDisconnect}>
               <Power className="h-3 w-3" /> Desconectar
             </Button>
           </>

@@ -17,16 +17,16 @@ interface ResultsGridProps {
 export function ResultsGrid({ products, isLoading, onSelect, selectedId }: ResultsGridProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-[240px] w-full rounded-xl" />
+          <Skeleton key={i} className="h-[200px] w-full rounded-xl sm:h-[240px]" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4">
       {products.map((product) => (
         <Card 
           key={product.id} 

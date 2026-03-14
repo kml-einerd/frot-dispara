@@ -4,6 +4,7 @@ import { Header } from "@/src/components/layout/Header";
 import { Button } from "@/src/components/ui/button";
 import { Plus } from "lucide-react";
 import useSWR from "swr";
+import { PullToRefresh } from "@/src/components/ui/pull-to-refresh";
 import { WaSession } from "@/src/types";
 import { SessionCard } from "@/src/components/whatsapp/SessionCard";
 import { useState } from "react";
@@ -22,18 +23,19 @@ export default function WhatsAppPage() {
   };
 
   return (
+    <PullToRefresh onRefresh={() => mutate()}>
     <div className="flex flex-col gap-6">
       <Header title="WhatsApp" showNewPromo={false} />
       
-      <div className="flex items-center justify-between px-6">
+      <div className="flex items-center justify-between px-4 sm:px-6">
         <h2 className="text-lg font-semibold">Suas Sessões</h2>
-        <Button className="gap-2">
+        <Button className="min-h-[44px] gap-2">
           <Plus className="h-4 w-4" />
           Nova Sessão
         </Button>
       </div>
 
-      <div className="grid gap-6 px-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 px-4 sm:px-6 sm:grid-cols-2 lg:grid-cols-3">
         {sessions.map((session) => (
           <SessionCard 
             key={session.id} 
@@ -61,5 +63,6 @@ export default function WhatsAppPage() {
         />
       )}
     </div>
+    </PullToRefresh>
   );
 }

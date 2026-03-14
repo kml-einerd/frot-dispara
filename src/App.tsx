@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from './components/ui/toaster';
 import { SWRConfig } from 'swr';
 import { api } from './lib/api';
+import { useAuthStore } from './store/auth';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { CopilotPage } from './pages/CopilotPage';
 import { LoginPage } from './pages/LoginPage';
@@ -16,6 +18,13 @@ import { SettingsPage } from './pages/SettingsPage';
 const swrFetcher = (url: string) => api.get(url);
 
 export default function App() {
+  const initialize = useAuthStore((s) => s.initialize);
+
+  useEffect(() => {
+    const unsubscribe = initialize();
+    return unsubscribe;
+  }, [initialize]);
+
   return (
     <SWRConfig value={{ fetcher: swrFetcher, revalidateOnFocus: false }}>
       <BrowserRouter>

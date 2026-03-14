@@ -2,7 +2,7 @@
 
 import { Button } from "@/src/components/ui/button";
 import { Rocket } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signInWithGoogle } from "@/src/lib/auth";
 
 export default function LoginPage() {
   return (
@@ -11,17 +11,17 @@ export default function LoginPage() {
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
           <Rocket className="h-10 w-10 text-white" />
         </div>
-        
+
         <div className="space-y-2">
           <h1 className="text-4xl font-bold tracking-tighter">Dispara</h1>
           <p className="text-lg text-muted-foreground">Seu copiloto de promoções</p>
         </div>
 
         <div className="mt-8 w-full max-w-sm space-y-4">
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="w-full gap-3 bg-white text-black hover:bg-white/90"
-            onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+            onClick={() => signInWithGoogle()}
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -43,7 +43,7 @@ export default function LoginPage() {
             </svg>
             Entrar com Google
           </Button>
-          
+
           <p className="text-xs text-muted-foreground">
             Ao entrar, você concorda com nossos termos de serviço.
           </p>

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, ImagePlus, Link2, Loader2, Bot, Sparkles } from 'lucide-react';
+import { Send, ImagePlus, Loader2, Sparkles, AlertCircle, RefreshCw, Link2 } from 'lucide-react';
 import { Button } from '../ui/button';
-import { cn } from '@/src/lib/utils';
 import { Product } from '@/src/types';
+import { api } from '@/src/lib/api';
 import { ChatProductCard } from './ChatProductCard';
 import { ChatPromoReady } from './ChatPromoReady';
 import { ChatDispatchConfirm } from './ChatDispatchConfirm';
@@ -18,8 +18,9 @@ interface ProductsContent { type: 'products'; products: Product[] }
 interface PromoContent { type: 'promo'; product: Product; variations: Record<string, string> }
 interface DispatchContent { type: 'dispatch'; product: Product; variation: string }
 interface LoadingContent { type: 'loading'; text: string }
+interface ErrorContent { type: 'error'; text: string; retryAction?: () => void }
 
-type MessageContent = TextContent | ProductsContent | PromoContent | DispatchContent | LoadingContent;
+type MessageContent = TextContent | ProductsContent | PromoContent | DispatchContent | LoadingContent | ErrorContent;
 
 interface Message {
   id: string;
@@ -27,75 +28,49 @@ interface Message {
   content: MessageContent;
 }
 
-// ── mock de respostas da IA ─────────────────────────────────────────────────
+interface InteractResponse {
+  intent: string;
+  confidence: number;
+  products: Array<Product & {
+    variations?: Array<{ id: string; label: string; copyText: string; isDefault: boolean }>;
+  }>;
+  response: string;
+  promoReady: boolean;
+}
 
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: 'p1', name: 'Tênis Nike Air Max Excee Masculino Branco',
-    originalPrice: 599.90, promoPrice: 359.90, discountPercent: 40,
-    imageUrl: 'https://picsum.photos/seed/nike1/400/400',
-    productUrl: 'https://shopee.com.br/product/123/456',
-    affiliateUrl: 'https://shope.ee/abc123', marketplace: 'SHOPEE', category: 'Calçados',
-  },
-  {
-    id: 'p2', name: 'Tênis Adidas Ultraboost 22 Running',
-    originalPrice: 799.90, promoPrice: 519.90, discountPercent: 35,
-    imageUrl: 'https://picsum.photos/seed/adidas1/400/400',
-    productUrl: 'https://mercadolivre.com.br/p/MLB456',
-    affiliateUrl: 'https://mercadolivre.com/sec/abc456', marketplace: 'MERCADOLIVRE', category: 'Calçados',
-  },
-  {
-    id: 'p3', name: 'Tênis Puma RS-X Bold Colorido',
-    originalPrice: 499.90, promoPrice: 289.90, discountPercent: 42,
-    imageUrl: 'https://picsum.photos/seed/puma1/400/400',
-    productUrl: 'https://shopee.com.br/product/789/012',
-    affiliateUrl: 'https://shope.ee/xyz789', marketplace: 'SHOPEE', category: 'Calçados',
-  },
-];
+// ── helpers ─────────────────────────────────────────────────────────────────
 
-const MOCK_ELECTRONICS: Product[] = [
-  {
-    id: 'e1', name: 'Fone JBL Tune 510BT Bluetooth Sem Fio',
-    originalPrice: 299.90, promoPrice: 169.90, discountPercent: 43,
-    imageUrl: 'https://picsum.photos/seed/jbl/400/400',
-    productUrl: 'https://shopee.com.br/product/fone/jbl',
-    affiliateUrl: 'https://shope.ee/fone123', marketplace: 'SHOPEE', category: 'Eletrônicos',
-  },
-  {
-    id: 'e2', name: 'Smartwatch Xiaomi Mi Band 8 GPS Monitor',
-    originalPrice: 349.90, promoPrice: 199.90, discountPercent: 43,
-    imageUrl: 'https://picsum.photos/seed/xiaomi/400/400',
-    productUrl: 'https://mercadolivre.com.br/p/MLB789',
-    affiliateUrl: 'https://mercadolivre.com/sec/watch123', marketplace: 'MERCADOLIVRE', category: 'Eletrônicos',
-  },
-];
+const URL_REGEX = /https?:\/\/(www\.)?(shopee\.com\.br|mercadolivre\.com\.br|amazon\.com\.br|magazineluiza\.com\.br|aliexpress\.com)[^\s]*/i;
 
-function buildVariations(product: Product): Record<string, string> {
+function isMarketplaceUrl(text: string): boolean {
+  return URL_REGEX.test(text);
+}
+
+function getLoadingTextForInput(value: string): string {
+  if (isMarketplaceUrl(value)) return 'Extraindo produto do link...';
+  return 'Buscando produtos...';
+}
+
+function buildVariationsFromBackend(
+  product: Product & { variations?: Array<{ label: string; copyText: string }> },
+): Record<string, string> {
+  if (product.variations && product.variations.length > 0) {
+    const map: Record<string, string> = {};
+    for (const v of product.variations) {
+      map[v.label] = v.copyText;
+    }
+    return map;
+  }
   const n = product.name;
   const d = product.discountPercent;
   const p = `R$ ${product.promoPrice.toFixed(2)}`;
   const o = `R$ ${product.originalPrice.toFixed(2)}`;
   const url = product.affiliateUrl;
   return {
-    urgente: `🔥 CORRE! ${n} com ${d}% OFF!\n\nDe ${o} por apenas ${p}!\nPromoção por tempo limitado ⚡\n\n👉 ${url}`,
-    casual: `Olha esse achadinho 😍\n\n${n}\n\nSó ${p} (era ${o})\n\n${url}`,
-    formal: `📢 Oferta especial:\n\n${n}\nValor: ${p} | Desconto: ${d}%\n\n${url}`,
-    divertido: `O estagiário ficou louco! 🤪\n\n${n} tá quase de graça!\n\nSó ${p} 💸\n\nPega logo: ${url}`,
-    escassez: `⏳ ÚLTIMAS UNIDADES!\n\n${n} com ${d}% OFF.\nFinal: ${p}\n\nGaranta já: ${url}`,
+    urgente: `\u{1F525} CORRE! ${n} com ${d}% OFF!\n\nDe ${o} por apenas ${p}!\nPromocao por tempo limitado \u26A1\n\n\u{1F449} ${url}`,
+    casual: `Olha esse achadinho \u{1F60D}\n\n${n}\n\nSo ${p} (era ${o})\n\n${url}`,
+    formal: `\u{1F4E2} Oferta especial:\n\n${n}\nValor: ${p} | Desconto: ${d}%\n\n${url}`,
   };
-}
-
-function detectIntent(input: string): 'search' | 'url' | 'image_prompt' | 'select' | 'dispatch' | 'unknown' {
-  const lower = input.toLowerCase();
-  if (lower.startsWith('http') || lower.includes('shopee.com') || lower.includes('mercadolivre.com')) return 'url';
-  if (lower.includes('dispara') || lower.includes('envia') || lower.includes('manda') || lower.includes('grupo')) return 'dispatch';
-  if (lower.includes('selec') || lower.includes('esse') || lower.includes('primeiro') || lower.includes('segundo') || lower.includes('terceiro')) return 'select';
-  if (lower.length > 3) return 'search';
-  return 'unknown';
-}
-
-async function simulateDelay(ms: number) {
-  return new Promise(r => setTimeout(r, ms));
 }
 
 // ── componente principal ────────────────────────────────────────────────────
@@ -107,15 +82,15 @@ export function ChatCopilot() {
       role: 'assistant',
       content: {
         type: 'text',
-        text: 'Olá! Sou o copiloto do Dispara 🚀\n\nMe diga o que quer divulgar:\n• Digite o nome do produto (ex: "tênis nike")\n• Cole um link do Shopee ou Mercado Livre\n• Envie uma foto do produto 📸',
+        text: 'Ola! Sou o copiloto do Dispara \u{1F680}\n\nMe diga o que quer divulgar:\n\u2022 Digite o nome do produto (ex: "tenis nike")\n\u2022 Cole um link do Shopee ou Mercado Livre\n\u2022 Envie uma foto do produto \u{1F4F8}',
       },
     },
   ]);
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [pendingProducts, setPendingProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [lastProducts, setLastProducts] = useState<InteractResponse['products']>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -140,97 +115,169 @@ export function ChatCopilot() {
     });
   }, []);
 
+  // ── handleSend: texto ou link ───────────────────────────────────────────
+
   const handleSend = useCallback(async (text?: string) => {
     const value = (text ?? input).trim();
     if (!value || isTyping) return;
     setInput('');
 
-    addMessage({ role: 'user', content: { type: 'text', text: value } });
+    const isLink = isMarketplaceUrl(value);
+    addMessage({ role: 'user', content: { type: 'text', text: isLink ? `\u{1F517} ${value}` : value } });
     setIsTyping(true);
+    addMessage({ role: 'assistant', content: { type: 'loading', text: getLoadingTextForInput(value) } });
 
-    const intent = detectIntent(value);
-
-    // Loading bubble
-    addMessage({ role: 'assistant', content: { type: 'loading', text: 'Buscando produtos...' } });
-    await simulateDelay(1200);
-
-    if (intent === 'url') {
-      const isShopee = value.includes('shopee');
-      const product: Product = {
-        id: 'url_p1',
-        name: isShopee ? 'Produto Shopee — Link colado' : 'Produto Mercado Livre — Link colado',
-        originalPrice: 399.90,
-        promoPrice: 229.90,
-        discountPercent: 43,
-        imageUrl: `https://picsum.photos/seed/${isShopee ? 'shopee_url' : 'ml_url'}/400/400`,
-        productUrl: value,
-        affiliateUrl: isShopee ? `https://shope.ee/link${Date.now()}` : `https://mercadolivre.com/sec/link${Date.now()}`,
-        marketplace: isShopee ? 'SHOPEE' : 'MERCADOLIVRE',
-      };
-      setPendingProducts([product]);
-      replaceLastAssistant({
-        type: 'products',
-        products: [product],
+    const doRequest = async () => {
+      const data: InteractResponse = await api.post('/agent/interact', {
+        message: value,
+        context: selectedProduct ? { selectedProductId: selectedProduct.id } : undefined,
       });
-      addMessage({ role: 'assistant', content: { type: 'text', text: 'Encontrei o produto! Clique nele para gerar o anúncio 👆' } });
-    } else if (intent === 'search') {
-      const lower = value.toLowerCase();
-      const products = lower.includes('fone') || lower.includes('smart') || lower.includes('elet')
-        ? MOCK_ELECTRONICS
-        : MOCK_PRODUCTS;
-      setPendingProducts(products);
-      replaceLastAssistant({ type: 'products', products });
-      addMessage({ role: 'assistant', content: { type: 'text', text: `Encontrei ${products.length} produtos! Clique no que quiser para gerar o anúncio 👆` } });
-    } else if (intent === 'dispatch' && selectedProduct) {
-      replaceLastAssistant({ type: 'loading', text: 'Preparando disparo...' });
-      await simulateDelay(800);
-      const variations = buildVariations(selectedProduct);
-      replaceLastAssistant({ type: 'dispatch', product: selectedProduct, variation: variations.urgente! });
-    } else {
-      replaceLastAssistant({ type: 'text', text: 'Não entendi 😅 Tente digitar o nome de um produto, colar um link ou enviar uma foto!' });
+
+      setLastProducts(data.products);
+
+      // Intent routing: gerar_copy → PromoReady direto (se tem produto selecionado)
+      if (data.intent === 'gerar_copy' && selectedProduct) {
+        const variations: Record<string, string> = { gerado: data.response };
+        replaceLastAssistant({ type: 'promo', product: selectedProduct, variations });
+        return;
+      }
+
+      // Intent routing: gerar_copy com produtos retornados → PromoReady do primeiro
+      if (data.intent === 'gerar_copy' && data.products.length > 0) {
+        const product = data.products[0]!;
+        const withVariations = data.products[0]!;
+        const variations = buildVariationsFromBackend(withVariations);
+        // Se backend gerou copy na response, adiciona como variação extra
+        if (data.response && !data.response.includes('nao encontrei')) {
+          variations.gerado = data.response;
+        }
+        setSelectedProduct(product);
+        replaceLastAssistant({ type: 'promo', product, variations });
+        addMessage({ role: 'assistant', content: { type: 'text', text: 'Escolha o tom do anuncio e edite se quiser. Quando pronto, clique em **Disparar** \u{1F680}' } });
+        return;
+      }
+
+      // busca_produto ou qualquer intent com produtos
+      if (data.products.length > 0) {
+        replaceLastAssistant({ type: 'products', products: data.products });
+        addMessage({ role: 'assistant', content: { type: 'text', text: data.response } });
+        return;
+      }
+
+      // Sem produtos — mostra resposta textual
+      replaceLastAssistant({ type: 'text', text: data.response });
+    };
+
+    try {
+      await doRequest();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao conectar com o servidor';
+      replaceLastAssistant({
+        type: 'error',
+        text: msg,
+        retryAction: () => {
+          replaceLastAssistant({ type: 'loading', text: 'Tentando novamente...' });
+          doRequest()
+            .catch(retryErr => {
+              const retryMsg = retryErr instanceof Error ? retryErr.message : 'Falha na segunda tentativa';
+              replaceLastAssistant({ type: 'error', text: retryMsg });
+            })
+            .finally(() => setIsTyping(false));
+        },
+      });
     }
 
     setIsTyping(false);
   }, [input, isTyping, addMessage, replaceLastAssistant, selectedProduct]);
 
+  // ── handleProductSelect: selecionar produto → gerar variações ───────────
+
   const handleProductSelect = useCallback(async (product: Product) => {
     setSelectedProduct(product);
     setIsTyping(true);
     addMessage({ role: 'user', content: { type: 'text', text: `Selecionei: ${product.name}` } });
-    addMessage({ role: 'assistant', content: { type: 'loading', text: 'Gerando anúncios com IA...' } });
-    await simulateDelay(1400);
-    const variations = buildVariations(product);
-    replaceLastAssistant({ type: 'promo', product, variations });
-    addMessage({ role: 'assistant', content: { type: 'text', text: 'Escolha o tom do anúncio e edite se quiser. Quando pronto, clique em **Disparar** 🚀' } });
+    addMessage({ role: 'assistant', content: { type: 'loading', text: 'Gerando anuncios com IA...' } });
+
+    try {
+      // Tenta gerar copy via backend
+      const data: InteractResponse = await api.post('/agent/interact', {
+        message: `gerar copy para ${product.name}`,
+        context: { selectedProductId: product.id },
+      });
+
+      // Usa variações do backend se disponíveis, senão gera localmente
+      const withVariations = lastProducts.find(p => p.id === product.id);
+      const variations = buildVariationsFromBackend(withVariations ?? product);
+
+      // Adiciona copy gerada pelo AI como variação extra
+      if (data.response && !data.response.includes('nao encontrei')) {
+        variations.gerado = data.response;
+      }
+
+      replaceLastAssistant({ type: 'promo', product, variations });
+      addMessage({ role: 'assistant', content: { type: 'text', text: 'Escolha o tom do anuncio e edite se quiser. Quando pronto, clique em **Disparar** \u{1F680}' } });
+    } catch {
+      // Fallback: gera variações localmente se backend falhar
+      const withVariations = lastProducts.find(p => p.id === product.id);
+      const variations = buildVariationsFromBackend(withVariations ?? product);
+      replaceLastAssistant({ type: 'promo', product, variations });
+      addMessage({ role: 'assistant', content: { type: 'text', text: 'Escolha o tom do anuncio e edite se quiser. Quando pronto, clique em **Disparar** \u{1F680}' } });
+    }
+
     setIsTyping(false);
-  }, [addMessage, replaceLastAssistant]);
+  }, [addMessage, replaceLastAssistant, lastProducts]);
+
+  // ── handleDispatch ────────────────────────────────────────────────────────
 
   const handleDispatch = useCallback(async (variation: string) => {
     if (!selectedProduct) return;
     setIsTyping(true);
     addMessage({ role: 'user', content: { type: 'text', text: 'Quero disparar para os grupos!' } });
     addMessage({ role: 'assistant', content: { type: 'loading', text: 'Carregando seus grupos...' } });
-    await simulateDelay(900);
     replaceLastAssistant({ type: 'dispatch', product: selectedProduct, variation });
     setIsTyping(false);
   }, [selectedProduct, addMessage, replaceLastAssistant]);
 
+  // ── handleImageUpload: upload real via FormData ───────────────────────────
+
   const handleImageUpload = useCallback(async (file: File) => {
     setIsTyping(true);
-    const objectUrl = URL.createObjectURL(file);
     addMessage({
       role: 'user',
-      content: { type: 'text', text: `📷 [Foto enviada: ${file.name}]` },
+      content: { type: 'text', text: `\u{1F4F7} [Foto enviada: ${file.name}]` },
     });
     addMessage({ role: 'assistant', content: { type: 'loading', text: 'Analisando imagem com IA...' } });
-    await simulateDelay(1800);
-    const products = MOCK_PRODUCTS;
-    setPendingProducts(products);
-    replaceLastAssistant({ type: 'products', products });
-    addMessage({ role: 'assistant', content: { type: 'text', text: 'Identificado! Esses são os produtos mais parecidos. Escolha um para gerar o anúncio 👆' } });
-    URL.revokeObjectURL(objectUrl);
+
+    try {
+      // TODO(FASE 2): Implementar image-generation via /promos/generate-image
+      // Por ora, faz fallback para busca textual usando nome do arquivo
+      const fallbackQuery = file.name.replace(/\.\w+$/, '').replace(/[-_]/g, ' ');
+      const data: InteractResponse = await api.post('/agent/interact', { message: fallbackQuery });
+      setLastProducts(data.products);
+
+      if (data.products.length > 0) {
+        replaceLastAssistant({ type: 'products', products: data.products });
+        addMessage({ role: 'assistant', content: { type: 'text', text: data.response } });
+      } else {
+        replaceLastAssistant({ type: 'text', text: 'Nao encontrei produtos parecidos. Tente digitar o nome do produto.' });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao processar imagem';
+      replaceLastAssistant({ type: 'error', text: msg });
+    }
+
     setIsTyping(false);
   }, [addMessage, replaceLastAssistant]);
+
+  // ── handlePaste: detectar URL colada ──────────────────────────────────────
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData('text');
+    if (isMarketplaceUrl(pasted) && !input.trim()) {
+      e.preventDefault();
+      handleSend(pasted);
+    }
+  }, [input, handleSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -257,7 +304,7 @@ export function ChatCopilot() {
       {/* Quick suggestions */}
       {messages.length <= 1 && (
         <div className="px-4 pb-3 flex flex-wrap gap-2">
-          {['tênis nike', 'fone bluetooth', 'smartwatch', 'https://shopee.com.br/...'].map(s => (
+          {['tenis nike', 'fone bluetooth', 'smartwatch'].map(s => (
             <button
               key={s}
               onClick={() => handleSend(s)}
@@ -266,6 +313,16 @@ export function ChatCopilot() {
               {s}
             </button>
           ))}
+          <button
+            onClick={() => {
+              const url = prompt('Cole o link do produto:');
+              if (url) handleSend(url);
+            }}
+            className="rounded-full border border-border/60 bg-secondary/50 px-3 py-1 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center gap-1"
+          >
+            <Link2 className="h-3 w-3" />
+            Colar link
+          </button>
         </div>
       )}
 
@@ -276,6 +333,7 @@ export function ChatCopilot() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder="Digite o produto, cole um link ou envie uma foto..."
             rows={1}
             className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 max-h-32 min-h-[24px]"
@@ -288,10 +346,14 @@ export function ChatCopilot() {
           />
           <div className="flex items-center gap-1 pb-0.5">
             <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={e => e.target.files?.[0] && handleImageUpload(e.target.files[0])} />
+              onChange={e => {
+                if (e.target.files?.[0]) handleImageUpload(e.target.files[0]);
+                e.target.value = ''; // permite reupload do mesmo arquivo
+              }} />
             <button
               onClick={() => fileRef.current?.click()}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              disabled={isTyping}
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-40"
               title="Enviar foto"
             >
               <ImagePlus className="h-4 w-4" />
@@ -340,6 +402,29 @@ function ChatMessage({
     );
   }
 
+  if (content.type === 'error') {
+    return (
+      <div className="flex items-start gap-3">
+        <BotAvatar />
+        <div className="flex flex-col gap-2 rounded-2xl rounded-tl-sm border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            {content.text}
+          </div>
+          {content.retryAction && (
+            <button
+              onClick={content.retryAction}
+              className="flex items-center gap-1.5 self-start rounded-lg bg-secondary/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Tentar novamente
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (isUser) {
     return (
       <div className="flex justify-end">
@@ -350,13 +435,12 @@ function ChatMessage({
     );
   }
 
-  // assistant
   if (content.type === 'text') {
     return (
       <div className="flex items-start gap-3">
         <BotAvatar />
         <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-secondary/60 px-4 py-3 text-sm leading-relaxed whitespace-pre-line">
-          {content.text}
+          <StreamingText text={content.text} />
         </div>
       </div>
     );
@@ -400,6 +484,32 @@ function ChatMessage({
   }
 
   return null;
+}
+
+function StreamingText({ text }: { text: string }) {
+  const [displayed, setDisplayed] = useState('');
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (text.length <= 20) {
+      setDisplayed(text);
+      setDone(true);
+      return;
+    }
+    let i = 0;
+    const chunkSize = Math.max(1, Math.floor(text.length / 30)); // ~30 steps
+    const interval = setInterval(() => {
+      i = Math.min(i + chunkSize, text.length);
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) {
+        setDone(true);
+        clearInterval(interval);
+      }
+    }, 25);
+    return () => clearInterval(interval);
+  }, [text]);
+
+  return <>{displayed}{!done && <span className="animate-pulse">|</span>}</>;
 }
 
 function BotAvatar() {
