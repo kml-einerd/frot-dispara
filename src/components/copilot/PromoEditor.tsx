@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Badge } from "../ui/badge";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Check, Sparkles, Smile, RefreshCw, AlertTriangle, Copy, Eye, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, Sparkles, Smile, RefreshCw, AlertTriangle, Copy, Eye, ChevronDown, ChevronUp, Zap, Minus, Instagram, Smartphone, ImageIcon, Loader2 } from "lucide-react";
+import { Switch } from "../ui/switch";
+import { Skeleton } from "../ui/skeleton";
 
 // ── Constantes ──────────────────────────────────────────────────────────────
 
@@ -157,6 +159,192 @@ function CharCounter({ count }: { count: number }) {
   );
 }
 
+// ── Image Style Constants ───────────────────────────────────────────────────
+
+const IMAGE_STYLES = [
+  { id: 'clean', label: 'Clean', description: 'Minimalista, fundo neutro', icon: Sparkles },
+  { id: 'bold', label: 'Bold', description: 'Vibrante, destaque de preço', icon: Zap },
+  { id: 'minimal', label: 'Minimal', description: 'Estilo Apple, elegante', icon: Minus },
+  { id: 'social', label: 'Social', description: 'Post de rede social', icon: Instagram },
+  { id: 'story', label: 'Story', description: 'WhatsApp Status 9:16', icon: Smartphone },
+] as const;
+
+type ImageStyle = typeof IMAGE_STYLES[number]['id'];
+
+// ── ImageGenerator Component ────────────────────────────────────────────────
+
+function ImageGenerator({
+  promoId,
+  product,
+  onImageGenerated,
+}: {
+  promoId: string;
+  product: Product;
+  onImageGenerated: (url: string) => void;
+}) {
+  const [selectedStyle, setSelectedStyle] = useState<ImageStyle>('clean');
+  const [includeText, setIncludeText] = useState(false);
+  const [overlayText, setOverlayText] = useState(`DE R$${product.originalPrice.toFixed(0)} POR R$${product.promoPrice.toFixed(0)}`);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/promos/${promoId}/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          style: selectedStyle,
+          overlayText: includeText ? overlayText : undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Falha ao gerar imagem');
+      const data = await res.json() as { imageUrl: string };
+      setGeneratedUrl(data.imageUrl);
+      onImageGenerated(data.imageUrl);
+    } catch {
+      setError('Erro ao gerar imagem. Tente novamente.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRegenerate = () => {
+    setGeneratedUrl(null);
+    handleGenerate();
+  };
+
+  const handleChangeStyle = () => {
+    setGeneratedUrl(null);
+  };
+
+  return (
+    <div className="space-y-4 rounded-lg border border-border/50 bg-secondary/20 p-4">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <ImageIcon className="h-4 w-4 text-violet-400" />
+        Imagem Promocional
+      </div>
+
+      {/* Generated image preview */}
+      {generatedUrl && !isGenerating ? (
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-lg border border-border/30">
+            <img
+              src={generatedUrl}
+              alt="Imagem gerada"
+              className="w-full object-contain"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRegenerate}
+              className="flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Gerar outra
+            </button>
+            <button
+              onClick={handleChangeStyle}
+              className="flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80"
+            >
+              <Sparkles className="h-3 w-3" />
+              Trocar estilo
+            </button>
+            <button
+              onClick={() => onImageGenerated(generatedUrl)}
+              className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700"
+            >
+              <Check className="h-3 w-3" />
+              Usar esta
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Loading skeleton */}
+          {isGenerating ? (
+            <div className="space-y-2">
+              <Skeleton className="h-48 w-full rounded-lg" />
+              <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Gerando imagem...
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Style selector — 5 cards */}
+              <div className="grid grid-cols-5 gap-2">
+                {IMAGE_STYLES.map((style) => {
+                  const Icon = style.icon;
+                  const isSelected = selectedStyle === style.id;
+                  return (
+                    <button
+                      key={style.id}
+                      onClick={() => setSelectedStyle(style.id)}
+                      className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-center transition-all ${
+                        isSelected
+                          ? 'border-violet-500 bg-violet-500/10 text-violet-300'
+                          : 'border-border/30 bg-background/50 text-muted-foreground hover:border-border hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span className="text-[11px] font-medium">{style.label}</span>
+                      <span className="hidden text-[9px] leading-tight opacity-70 sm:block">{style.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Text overlay toggle */}
+              <div className="flex items-center justify-between rounded-md bg-background/50 px-3 py-2">
+                <label htmlFor="include-text" className="text-xs text-muted-foreground">
+                  Incluir texto na imagem
+                </label>
+                <Switch
+                  id="include-text"
+                  checked={includeText}
+                  onCheckedChange={setIncludeText}
+                />
+              </div>
+
+              {/* Overlay text input */}
+              {includeText && (
+                <input
+                  type="text"
+                  value={overlayText}
+                  onChange={(e) => setOverlayText(e.target.value)}
+                  placeholder="Ex: DE R$99 POR R$49"
+                  className="w-full rounded-md border border-border/50 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                />
+              )}
+
+              {/* Error message */}
+              {error && (
+                <div className="flex items-center gap-1.5 text-xs text-red-400">
+                  <AlertTriangle className="h-3 w-3" />
+                  {error}
+                </div>
+              )}
+
+              {/* Generate button */}
+              <button
+                onClick={handleGenerate}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+              >
+                <ImageIcon className="h-4 w-4" />
+                Gerar Imagem
+              </button>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main Component ──────────────────────────────────────────────────────────
 
 interface PromoEditorProps {
@@ -173,6 +361,7 @@ export function PromoEditor({ product, promoId }: PromoEditorProps) {
   const [spintaxPreviews, setSpintaxPreviews] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fillTemplate = useCallback((template: string) => {
@@ -370,13 +559,22 @@ export function PromoEditor({ product, promoId }: PromoEditorProps) {
                 {showPreview && (
                   <WhatsAppPreview
                     text={currentHasSpintax ? resolveSpintax(copies[v.id] || '') : (copies[v.id] || '')}
-                    imageUrl={product.imageUrl}
+                    imageUrl={generatedImageUrl || product.imageUrl}
                   />
                 )}
               </div>
             </TabsContent>
           ))}
         </Tabs>
+
+        {/* Image Generator Section */}
+        {promoId && (
+          <ImageGenerator
+            promoId={promoId}
+            product={product}
+            onImageGenerated={setGeneratedImageUrl}
+          />
+        )}
       </CardContent>
     </Card>
   );

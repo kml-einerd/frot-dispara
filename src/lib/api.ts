@@ -1,4 +1,5 @@
 import { useAuthStore } from '../store/auth';
+import { supabase } from './supabase';
 import { mockSessions, mockGroups, mockProducts, mockPromos, mockDispatches, mockAffiliateAccounts, mockGateStatus, mockDispatchesExtended } from './api-mock';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/v1';
@@ -47,6 +48,31 @@ async function fetcher(url: string, options: RequestInit = {}) {
     ...options,
     headers,
   });
+
+  if (response.status === 401) {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (data.session) {
+      useAuthStore.setState({
+        token: data.session.access_token,
+        session: data.session,
+        user: data.session.user,
+      });
+      const retryResponse = await fetch(`${API_URL}${url}`, {
+        ...options,
+        headers: {
+          ...headers,
+          'Authorization': `Bearer ${data.session.access_token}`,
+        },
+      });
+      if (!retryResponse.ok) {
+        const err = await retryResponse.json().catch(() => ({ message: 'Erro desconhecido' }));
+        throw new Error(err.message || 'Erro na requisição');
+      }
+      return retryResponse.json();
+    }
+    useAuthStore.getState().clearAuth();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Erro desconhecido' }));

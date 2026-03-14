@@ -14,6 +14,7 @@ import { PromosPage } from './pages/PromosPage';
 import { NewPromoPage } from './pages/NewPromoPage';
 import { DispatchesPage } from './pages/DispatchesPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { LinkRedirectPage } from './pages/LinkRedirectPage';
 
 const swrFetcher = (url: string) => api.get(url);
 
@@ -29,6 +30,7 @@ export default function App() {
     <SWRConfig value={{ fetcher: swrFetcher, revalidateOnFocus: false }}>
       <BrowserRouter>
         <Routes>
+          <Route path="/l/:code" element={<LinkRedirectPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<Navigate to="/copiloto" replace />} />
           <Route element={<DashboardLayout />}>

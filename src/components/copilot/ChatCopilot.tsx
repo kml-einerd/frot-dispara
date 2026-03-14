@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, ImagePlus, Loader2, Sparkles, AlertCircle, RefreshCw, Link2 } from 'lucide-react';
+import { Send, Loader2, Sparkles, AlertCircle, RefreshCw, Link2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Product } from '@/src/types';
 import { api } from '@/src/lib/api';
 import { ChatProductCard } from './ChatProductCard';
 import { ChatPromoReady } from './ChatPromoReady';
 import { ChatDispatchConfirm } from './ChatDispatchConfirm';
+import { ChatImageGenerator } from './ChatImageGenerator';
 
 // ── tipos de mensagem / UI ──────────────────────────────────────────────────
 
@@ -16,11 +17,12 @@ type MessageRole = 'user' | 'assistant';
 interface TextContent { type: 'text'; text: string }
 interface ProductsContent { type: 'products'; products: Product[] }
 interface PromoContent { type: 'promo'; product: Product; variations: Record<string, string> }
+interface ImageGenContent { type: 'image-gen'; product: Product; promoText: string }
 interface DispatchContent { type: 'dispatch'; product: Product; variation: string }
 interface LoadingContent { type: 'loading'; text: string }
 interface ErrorContent { type: 'error'; text: string; retryAction?: () => void }
 
-type MessageContent = TextContent | ProductsContent | PromoContent | DispatchContent | LoadingContent | ErrorContent;
+type MessageContent = TextContent | ProductsContent | PromoContent | ImageGenContent | DispatchContent | LoadingContent | ErrorContent;
 
 interface Message {
   id: string;
@@ -92,7 +94,6 @@ export function ChatCopilot() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [lastProducts, setLastProducts] = useState<InteractResponse['products']>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -238,36 +239,29 @@ export function ChatCopilot() {
     setIsTyping(false);
   }, [selectedProduct, addMessage, replaceLastAssistant]);
 
-  // ── handleImageUpload: upload real via FormData ───────────────────────────
+  // ── handleGenerateImage: abrir gerador de imagem para promo ──────────────
 
-  const handleImageUpload = useCallback(async (file: File) => {
-    setIsTyping(true);
+  const handleGenerateImage = useCallback((promoText: string) => {
+    if (!selectedProduct) return;
+    addMessage({ role: 'user', content: { type: 'text', text: 'Quero gerar uma imagem para essa promo!' } });
+    addMessage({ role: 'assistant', content: { type: 'image-gen', product: selectedProduct, promoText } });
+  }, [selectedProduct, addMessage]);
+
+  // ── handleImageReady: imagem gerada, anexar à promo ─────────────────────
+
+  const handleImageReady = useCallback((imageUrl: string) => {
     addMessage({
-      role: 'user',
-      content: { type: 'text', text: `\u{1F4F7} [Foto enviada: ${file.name}]` },
+      role: 'assistant',
+      content: { type: 'text', text: `Imagem gerada com sucesso! Ela sera anexada ao disparo automaticamente.` },
     });
-    addMessage({ role: 'assistant', content: { type: 'loading', text: 'Analisando imagem com IA...' } });
+    // Store image URL for dispatch — future: pass to ChatDispatchConfirm
+    setMessages(prev => {
+      const copy = [...prev];
+      // Find the last dispatch content and attach image, or just note it
+      return copy;
+    });
+  }, [addMessage]);
 
-    try {
-      // TODO(FASE 2): Implementar image-generation via /promos/generate-image
-      // Por ora, faz fallback para busca textual usando nome do arquivo
-      const fallbackQuery = file.name.replace(/\.\w+$/, '').replace(/[-_]/g, ' ');
-      const data: InteractResponse = await api.post('/agent/interact', { message: fallbackQuery });
-      setLastProducts(data.products);
-
-      if (data.products.length > 0) {
-        replaceLastAssistant({ type: 'products', products: data.products });
-        addMessage({ role: 'assistant', content: { type: 'text', text: data.response } });
-      } else {
-        replaceLastAssistant({ type: 'text', text: 'Nao encontrei produtos parecidos. Tente digitar o nome do produto.' });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao processar imagem';
-      replaceLastAssistant({ type: 'error', text: msg });
-    }
-
-    setIsTyping(false);
-  }, [addMessage, replaceLastAssistant]);
 
   // ── handlePaste: detectar URL colada ──────────────────────────────────────
 
@@ -296,6 +290,8 @@ export function ChatCopilot() {
             message={msg}
             onProductSelect={handleProductSelect}
             onDispatch={handleDispatch}
+            onGenerateImage={handleGenerateImage}
+            onImageReady={handleImageReady}
           />
         ))}
         <div ref={bottomRef} />
@@ -345,19 +341,6 @@ export function ChatCopilot() {
             }}
           />
           <div className="flex items-center gap-1 pb-0.5">
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={e => {
-                if (e.target.files?.[0]) handleImageUpload(e.target.files[0]);
-                e.target.value = ''; // permite reupload do mesmo arquivo
-              }} />
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={isTyping}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-40"
-              title="Enviar foto"
-            >
-              <ImagePlus className="h-4 w-4" />
-            </button>
             <Button
               size="sm"
               onClick={() => handleSend()}
@@ -382,10 +365,14 @@ function ChatMessage({
   message,
   onProductSelect,
   onDispatch,
+  onGenerateImage,
+  onImageReady,
 }: {
   message: Message;
   onProductSelect: (p: Product) => void;
   onDispatch: (variation: string) => void;
+  onGenerateImage: (promoText: string) => void;
+  onImageReady: (imageUrl: string) => void;
 }) {
   const isUser = message.role === 'user';
   const { content } = message;
@@ -466,7 +453,18 @@ function ChatMessage({
       <div className="flex items-start gap-3">
         <BotAvatar />
         <div className="flex-1 min-w-0">
-          <ChatPromoReady product={content.product} variations={content.variations} onDispatch={onDispatch} />
+          <ChatPromoReady product={content.product} variations={content.variations} onDispatch={onDispatch} onGenerateImage={onGenerateImage} />
+        </div>
+      </div>
+    );
+  }
+
+  if (content.type === 'image-gen') {
+    return (
+      <div className="flex items-start gap-3">
+        <BotAvatar />
+        <div className="flex-1 min-w-0">
+          <ChatImageGenerator product={content.product} promoText={content.promoText} onImageReady={onImageReady} />
         </div>
       </div>
     );

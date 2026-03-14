@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { Product } from '@/src/types';
 import { cn } from '@/src/lib/utils';
-import { Copy, Check, Rocket } from 'lucide-react';
+import { Copy, Check, Rocket, Image } from 'lucide-react';
 import { Button } from '../ui/button';
 
 interface ChatPromoReadyProps {
   product: Product;
   variations: Record<string, string>;
   onDispatch: (variation: string) => void;
+  onGenerateImage?: (promoText: string) => void;
 }
 
 const TABS = [
@@ -20,7 +21,7 @@ const TABS = [
   { key: 'escassez', label: '⏳ Escassez' },
 ];
 
-export function ChatPromoReady({ product, variations, onDispatch }: ChatPromoReadyProps) {
+export function ChatPromoReady({ product, variations, onDispatch, onGenerateImage }: ChatPromoReadyProps) {
   const [active, setActive] = useState('urgente');
   const [copied, setCopied] = useState(false);
   const [edited, setEdited] = useState<Record<string, string>>(variations);
@@ -81,14 +82,24 @@ export function ChatPromoReady({ product, variations, onDispatch }: ChatPromoRea
         </button>
       </div>
 
-      {/* dispatch button */}
-      <div className="border-t border-border/50 p-3">
+      {/* action buttons */}
+      <div className="flex gap-2 border-t border-border/50 p-3">
+        {onGenerateImage && (
+          <Button
+            variant="outline"
+            onClick={() => onGenerateImage(edited[active] ?? '')}
+            className="flex-1 gap-2"
+          >
+            <Image className="h-4 w-4" />
+            Gerar Imagem
+          </Button>
+        )}
         <Button
           onClick={() => onDispatch(edited[active] ?? '')}
-          className="w-full gap-2"
+          className="flex-1 gap-2"
         >
           <Rocket className="h-4 w-4" />
-          Disparar para grupos
+          Disparar
         </Button>
       </div>
     </div>
